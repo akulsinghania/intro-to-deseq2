@@ -1,0 +1,10 @@
+Sample_name	Sample_type	Disease
+Sample_1	PBMC	HC
+Sample_2	PBMC	HC
+Sample_3	PBMC	HC
+Sample_4	PBMC	DiseaseA
+Sample_5	PBMC	DiseaseA
+Sample_6	PBMC	DiseaseA
+Sample_7	PBMC	DiseaseB
+Sample_8	PBMC	DiseaseB
+Sample_9	PBMC	DiseaseB

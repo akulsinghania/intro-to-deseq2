@@ -1,0 +1,241 @@
+---
+title: "RNA-seq data analysis: Introduction to DESeq2"
+author: "Akul Singhania"
+date: "10/25/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/Users/asinghania/Desktop/Intro_to_DESeq2")
+```
+
+
+### Loading the working directory
+
+```{r, message=FALSE, tidy=TRUE}
+setwd("/Users/asinghania/Desktop/Intro_to_DESeq2")
+getwd()
+```
+
+### Loading the R packages
+
+```{r, warning=FALSE, message=FALSE, tidy=TRUE}
+library("DESeq2")
+library("BiocParallel")
+register(MulticoreParam(4))
+```
+
+### Importing the raw counts file and the metadata file
+
+This is the "All_HTSeq_Counts.txt" file provided by the Bioinformatics core, and a metadata file called "targets.txt" containing information about each sample
+
+```{r, warning=FALSE, tidy=TRUE}
+rawdata <- read.table("All_HTSeq_Counts.txt", row.names=1, header=T, sep="\t", stringsAsFactors=FALSE)
+dim(rawdata)
+head(rawdata)
+
+targets <- read.table("targets.txt", row.names=1, header=T, sep="\t")
+dim(targets)
+targets
+```
+
+#### Making sure that the raw counts file and the metadata file are in the same order
+```{r, warning=FALSE, tidy=TRUE}
+
+rownames(targets)
+colnames(rawdata)
+
+rownames(targets) == colnames(rawdata)
+
+rawdata<-rawdata[,order(colnames(rawdata))]
+targets<-targets[order(rownames(targets)),]
+
+rownames(targets)
+colnames(rawdata)
+
+rownames(targets) == colnames(rawdata)
+```
+
+### Setting up the DESeq object
+
+```{r, warning=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = rawdata,
+                              colData = targets,
+                              design = ~Disease)
+
+dds
+```
+
+### Filtering
+It is not necessary to pre-filter low count genes before running DESeq2.  By default, DESeq2 automatically performs independent strict filtering to increase power, on the mean of normalized counts within the results function.
+
+However, it can be useful to remove rows in which there are very few reads to reduce the memory size of the dds data object and increase the speed of the transformation and testing functions.
+
+Here we are performing a minimal pre-filtering step to keep only rows that have at least 10 reads total. 
+
+```{r, warning=FALSE, tidy=TRUE}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+dds
+```
+
+### Normalization
+```{r, warning=FALSE, tidy=TRUE, results='hide'}
+dds <- DESeq(dds, parallel=TRUE)
+save.image("DESeq_normalized.RData")
+```
+
+### Transformation
+#### VST (Variance stabilizing transformation)
+```{r, warning=FALSE, tidy=TRUE}
+vsd <- varianceStabilizingTransformation(dds, blind=FALSE)
+write.table (assay(vsd), "DESeq_VST_matrix.txt", sep="\t")
+```
+
+#### rlog (Regularized log transformation)
+```{r, warning=FALSE, tidy=TRUE}
+rlog_transform <- rlog(dds, blind=FALSE)
+write.table (assay(rlog_transform), "DESeq_rlog_matrix.txt", sep="\t")
+```
+
+### PCA
+```{r, warning=FALSE, tidy=TRUE}
+tmatrix<-t(assay(vsd))
+pcs<-prcomp(tmatrix)
+
+PC1<-pcs$x[,1]
+PC2<-pcs$x[,2]
+PC3<-pcs$x[,3]
+PC4<-pcs$x[,4]
+```
+
+#### PCA plot 1
+```{r, warning=FALSE}
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease))
+```
+
+#### PCA plot 2
+```{r, warning=FALSE}
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease), 
+     pch=16)
+```
+
+<br/><br/>
+More information on pch: https://www.statmethods.net/advgraphs/parameters.html
+
+#### Calculating the variance contribution of the principal componenets
+```{r, warning=FALSE, tidy=TRUE}
+
+eigs <- pcs$sdev^2
+head(eigs)
+
+var_PC1=(eigs[1]/sum(eigs)*100)
+var_PC1
+var_PC1=round(var_PC1,2)
+var_PC1
+
+var_PC2=(eigs[2]/sum(eigs)*100)
+var_PC2=round(var_PC2,2)
+```
+
+#### PCA plot 3
+```{r, warning=FALSE, results='hide'}
+pdf("PC1vsPC2.pdf")
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease), 
+     pch=as.integer(targets$Disease), 
+     xlab=paste("PC1 (",var_PC1,"%)",sep=""), 
+     ylab=paste("PC2 (",var_PC2,"%)",sep=""), 
+     cex=1.75, 
+     lwd=2.5,
+     cex.axis=2,
+     cex.lab=1.5)
+dev.off()
+```
+
+
+```{r, warning=FALSE, results='hide', echo=FALSE}
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease), 
+     pch=as.integer(targets$Disease), 
+     xlab=paste("PC1 (",var_PC1,"%)",sep=""), 
+     ylab=paste("PC2 (",var_PC2,"%)",sep=""), 
+     cex=1.75, 
+     lwd=2.5,
+     cex.axis=2,
+     cex.lab=1.5)
+```
+
+```{r, warning=FALSE, results='hide'}
+pdf("PC1vsPC2_labels.pdf")
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease), 
+     pch=as.integer(targets$Disease), 
+     xlab=paste("PC1 (",var_PC1,"%)",sep=""), 
+     ylab=paste("PC2 (",var_PC2,"%)",sep=""), 
+     cex=1.75, 
+     lwd=2.5,
+     cex.axis=2,
+     cex.lab=1.5)
+
+text(PC1, PC2, 
+     rownames(targets), 
+     cex=0.75,
+     adj=1.2)
+
+dev.off()
+```
+
+
+```{r, warning=FALSE, results='hide', echo=FALSE}
+plot(PC1, PC2, 
+     col=as.integer(targets$Disease), 
+     pch=as.integer(targets$Disease), 
+     xlab=paste("PC1 (",var_PC1,"%)",sep=""), 
+     ylab=paste("PC2 (",var_PC2,"%)",sep=""), 
+     cex=1.75, 
+     lwd=2.5,
+     cex.axis=2,
+     cex.lab=1.5)
+
+text(PC1, PC2, 
+     rownames(targets), 
+     cex=0.75,
+     adj=1.2)
+
+```
+
+### Differential gene expression anlaysis
+```{r, warning=FALSE, tidy=TRUE}
+design(dds)
+resultsNames(dds)
+
+res_DiseaseA_vs_HC<-results(dds,parallel=TRUE, contrast=c("Disease", "DiseaseA", "HC"))
+class(res_DiseaseA_vs_HC)
+head(res_DiseaseA_vs_HC)
+DiseaseA_vs_HC<-data.frame(res_DiseaseA_vs_HC)
+write.table(DiseaseA_vs_HC,"DEG_DiseaseA_vs_HC.txt",sep="\t")
+
+```
+
+### Filtering DEGs
+To subset genes with adj p-val < 0.05 & abs(FC) > 1
+```{r, warning=FALSE, tidy=TRUE}
+
+head(DiseaseA_vs_HC)
+head(DiseaseA_vs_HC[2])
+head(DiseaseA_vs_HC$log2FoldChange)
+
+DiseaseA_vs_HC<-na.omit(DiseaseA_vs_HC)
+DiseaseA_vs_HC_filtered<-DiseaseA_vs_HC[DiseaseA_vs_HC$padj<=0.05 & abs(DiseaseA_vs_HC$log2FoldChange)>=1 ,]
+dim(DiseaseA_vs_HC_filtered)
+
+
+write.table(DiseaseA_vs_HC_filtered,"DEG_DiseaseA_vs_HC_FC1_FDR_0_05.txt",sep="\t")
+```
+<br/><br/>
+More information on DESeq2: http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html 
+<br/><br/>
